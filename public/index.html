@@ -17,10 +17,14 @@
       console.log('WebSocket connection opened');
     });
 
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener('message', async (event) => {
       const chatMessages = document.getElementById('chatMessages');
       const li = document.createElement('li');
-      li.textContent = event.data;
+      
+      // Blob을 텍스트로 변환
+      const textMessage = await event.data.text();
+      li.textContent = textMessage;
+      
       chatMessages.appendChild(li);
     });
 
