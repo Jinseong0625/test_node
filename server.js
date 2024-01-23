@@ -8,6 +8,8 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+app.use(express.static('public'));
+
 wss.on('connection', (ws) => {
   // 클라이언트가 연결되었을 때 실행되는 로직
   console.log('Client connected');
