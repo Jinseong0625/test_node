@@ -6,32 +6,51 @@
   <title>WebSocket Chat</title>
 </head>
 <body>
+  <input type="text" id="nicknameInput" placeholder="Your Nickname">
   <input type="text" id="messageInput" placeholder="Type a message">
   <button onclick="sendMessage()">Send</button>
   <ul id="chatMessages"></ul>
 
   <script>
     const socket = new WebSocket('ws://localhost:3000');
+    let nickname = '';
+
+    // 닉네임을 입력받는 함수
+    function setNickname() {
+      const nicknameInput = document.getElementById('nicknameInput');
+      nickname = nicknameInput.value;
+      nicknameInput.disabled = true; // 닉네임을 입력받으면 수정할 수 없도록 비활성화
+    }
 
     socket.addEventListener('open', (event) => {
       console.log('WebSocket connection opened');
+      setNickname(); // 연결이 열리면 닉네임을 입력받음
     });
 
     socket.addEventListener('message', async (event) => {
       const chatMessages = document.getElementById('chatMessages');
       const li = document.createElement('li');
-      
+
       // Blob을 텍스트로 변환
       const textMessage = await event.data.text();
-      li.textContent = textMessage;
-      
+      const parsedMessage = JSON.parse(textMessage);
+
+      // 닉네임과 내용을 표시
+      li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+
       chatMessages.appendChild(li);
     });
 
     function sendMessage() {
       const messageInput = document.getElementById('messageInput');
       const message = messageInput.value;
-      socket.send(message);
+
+      // 닉네임과 내용을 서버로 전송
+      socket.send(JSON.stringify({
+        nickname: nickname,
+        content: message
+      }));
+
       messageInput.value = '';
     }
   </script>
