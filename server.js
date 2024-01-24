@@ -1,5 +1,3 @@
-// server.js
-
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -10,36 +8,57 @@ const wss = new WebSocket.Server({ server });
 
 app.use(express.static('public'));
 
+const clients = new Set();
+
 wss.on('connection', (ws) => {
-  // 클라이언트가 연결되었을 때 실행되는 로직
   console.log('Client connected');
 
-  // 클라이언트로부터 메시지를 받았을 때 실행되는 로직
+  // 클라이언트 목록에 추가
+  clients.add(ws);
+
   ws.on('message', (message) => {
     const parsedMessage = JSON.parse(message);
-    console.log(`Received message from ${parsedMessage.nickname}: ${parsedMessage.content}`);
-  
 
-    // 모든 클라이언트에게 메시지 전송
-    /*wss.clients.forEach((client) => {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }*/
+    if (parsedMessage.event === 'setNickname') {
+      // 클라이언트에서 서버로 닉네임 설정 요청
+      ws.nickname = parsedMessage.nickname;
 
-      // 모든 클라이언트에게 메시지 전송
-      wss.clients.forEach((client) => {
+      // 새로운 클라이언트가 입장했음을 기존 클라이언트에게 알림
+      const userList = Array.from(clients).map(client => client.nickname);
+      clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({
-            nickname: parsedMessage.nickname,
-            content: parsedMessage.content
-          }));
+          client.send(JSON.stringify({ event: 'userJoined', userList }));
         }
       });
-    });
+    } else if (parsedMessage.event === 'sendMessage') {
+      // 클라이언트에서 서버로 메시지 전송 요청
+      const messageToSend = {
+        nickname: ws.nickname,
+        content: parsedMessage.content
+      };
 
-  // 클라이언트가 연결을 종료했을 때 실행되는 로직
+      // 모든 클라이언트에게 메시지 전송
+      clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(messageToSend));
+        }
+      });
+    }
+  });
+
   ws.on('close', () => {
     console.log('Client disconnected');
+
+    // 클라이언트 목록에서 제거
+    clients.delete(ws);
+
+    // 클라이언트가 연결 종료시 사용자 목록 업데이트
+    const userList = Array.from(clients).map(client => client.nickname);
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ event: 'userJoined', userList }));
+      }
+    });
   });
 });
 

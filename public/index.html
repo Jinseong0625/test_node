@@ -5,53 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebSocket Chat</title>
 </head>
+
+<style>
+  #chatMessages {
+    list-style-type: none;
+    padding: 0;
+  }
+
+  #chatMessages li {
+    margin: 5px 0;
+    padding: 10px;
+    background-color: #f1f1f1;
+    border-radius: 8px;
+  }
+</style>
+
 <body>
+  <div id="userList"></div>
   <input type="text" id="nicknameInput" placeholder="Your Nickname">
-  <input type="text" id="messageInput" placeholder="Type a message">
-  <button onclick="sendMessage()">Send</button>
+  <button onclick="applyNickname()">Apply</button>
+  <input type="text" id="messageInput" placeholder="Type a message" disabled>
+  <button onclick="sendMessage()" disabled>Send</button>
   <ul id="chatMessages"></ul>
 
   <script>
     const socket = new WebSocket('ws://localhost:3000');
     let nickname = '';
 
-    // 닉네임을 입력받는 함수
-    function setNickname() {
+    function applyNickname() {
       const nicknameInput = document.getElementById('nicknameInput');
       nickname = nicknameInput.value;
-      nicknameInput.disabled = true; // 닉네임을 입력받으면 수정할 수 없도록 비활성화
+      nicknameInput.disabled = true;
+      document.getElementById('messageInput').disabled = false;
+      document.querySelector('button[onclick="sendMessage()"]').disabled = false;
+
+      // 클라이언트에서 서버로 닉네임 전송
+      socket.send(JSON.stringify({ event: 'setNickname', nickname }));
     }
 
-    socket.addEventListener('open', (event) => {
-      console.log('WebSocket connection opened');
-      setNickname(); // 연결이 열리면 닉네임을 입력받음
-    });
-
     socket.addEventListener('message', async (event) => {
-      const chatMessages = document.getElementById('chatMessages');
-      const li = document.createElement('li');
+      try {
+        const chatMessages = document.getElementById('chatMessages');
+        const li = document.createElement('li');
 
-      // Blob을 텍스트로 변환
-      const textMessage = await event.data.text();
-      const parsedMessage = JSON.parse(textMessage);
+        if (typeof event.data === 'string') {
+          const parsedMessage = JSON.parse(event.data);
 
-      // 닉네임과 내용을 표시
-      li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+          if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
+            li.textContent = `${parsedMessage.nickname} has joined the chat.`;
+            updateUserList(parsedMessage.userList);
+          } else {
+            li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+          }
+        } else if (event.data instanceof Blob) {
+          const textMessage = await event.data.text();
+          const parsedMessage = JSON.parse(textMessage);
 
-      chatMessages.appendChild(li);
+          if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
+            li.textContent = `${parsedMessage.nickname} has joined the chat.`;
+            updateUserList(parsedMessage.userList);
+          } else {
+            li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+          }
+        }
+
+        chatMessages.appendChild(li);
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
     });
 
     function sendMessage() {
-      const messageInput = document.getElementById('messageInput');
-      const message = messageInput.value;
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value;
 
-      // 닉네임과 내용을 서버로 전송
-      socket.send(JSON.stringify({
-        nickname: nickname,
-        content: message
-      }));
+    // 클라이언트에서 서버로 메시지 전송
+    socket.send(JSON.stringify({
+      event: 'sendMessage',
+      content: message
+    }));
 
-      messageInput.value = '';
+    messageInput.value = '';
+  }
+
+    function updateUserList(userList) {
+      const userListContainer = document.getElementById('userList');
+      userListContainer.innerHTML = '<strong>Users:</strong>';
+
+      userList.forEach((username) => {
+        const userItem = document.createElement('div');
+        userItem.textContent = username;
+        userListContainer.appendChild(userItem);
+      });
     }
   </script>
 </body>
