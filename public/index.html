@@ -29,64 +29,101 @@
   <ul id="chatMessages"></ul>
 
   <script>
-    const socket = new WebSocket('ws://218.38.65.83:3000/socket');
-    let nickname = '';
+    let socket;
 
     function applyNickname() {
       const nicknameInput = document.getElementById('nicknameInput');
-      nickname = nicknameInput.value;
-      nicknameInput.disabled = true;
-      document.getElementById('messageInput').disabled = false;
-      document.querySelector('button[onclick="sendMessage()"]').disabled = false;
+      const nickname = nicknameInput.value;
 
-      // 클라이언트에서 서버로 닉네임 전송
-      socket.send(JSON.stringify({ event: 'setNickname', nickname }));
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        // 클라이언트에서 서버로 소켓 연결 및 닉네임 전송
+        //socket = new WebSocket('ws://localhost:3000');
+        socket = new WebSocket('ws://218.38.65.83:3000/socket');
+        socket.addEventListener('open', () => {
+          console.log('WebSocket connection opened');
+          socket.send(JSON.stringify({ event: 'setNickname', nickname }));
+          nicknameInput.disabled = true;
+          document.getElementById('messageInput').disabled = false;
+          document.querySelector('button[onclick="sendMessage()"]').disabled = false;
+        });
+
+        // 메시지 ID를 저장하기 위한 Set
+        const processedMessageIds = new Set();
+
+        socket.addEventListener('message', async (event) => {
+          try {
+            console.log('Received message:', event.data);
+            const chatMessages = document.getElementById('chatMessages');
+            const li = document.createElement('li');
+
+            if (typeof event.data === 'string') {
+              const parsedMessage = JSON.parse(event.data);
+
+              if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
+                // 사용자가 입장한 경우
+                const messageId = parsedMessage.messageId;
+                // 고유 ID가 일치하는 경우에만 출력
+                if (!messageId || !processedMessageIds.has(messageId)) {
+                  li.textContent = parsedMessage.message || `${parsedMessage.nickname} has joined the chat.`;
+                  updateUserList(parsedMessage.userList);
+                  chatMessages.appendChild(li);
+                  if (messageId) {
+                    processedMessageIds.add(messageId);
+                  }
+                }
+              } else if (parsedMessage.event === 'userLeft' && parsedMessage.userList) {
+                // 사용자가 퇴장한 경우
+                li.textContent = `${parsedMessage.nickname} has left the chat.`;
+                updateUserList(parsedMessage.userList);
+                chatMessages.appendChild(li);
+              } else {
+                // 일반 메시지인 경우
+                li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+                chatMessages.appendChild(li);
+              }
+            } else if (event.data instanceof Blob) {
+              const textMessage = await event.data.text();
+              const parsedMessage = JSON.parse(textMessage);
+
+              if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
+                const messageId = parsedMessage.messageId;
+                if (!messageId || !processedMessageIds.has(messageId)) {
+                  li.textContent = parsedMessage.message || `${parsedMessage.nickname} has joined the chat.`;
+                  updateUserList(parsedMessage.userList);
+                  chatMessages.appendChild(li);
+                  if (messageId) {
+                    processedMessageIds.add(messageId);
+                  }
+                }
+              } else if (parsedMessage.event === 'userLeft' && parsedMessage.userList) {
+                li.textContent = `${parsedMessage.nickname} has left the chat.`;
+                updateUserList(parsedMessage.userList);
+                chatMessages.appendChild(li);
+              } else {
+                li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
+                chatMessages.appendChild(li);
+              }
+            }
+          } catch (error) {
+            console.error('Error handling WebSocket message:', error);
+          }
+        });
+      }
     }
 
-    socket.addEventListener('message', async (event) => {
-      try {
-        const chatMessages = document.getElementById('chatMessages');
-        const li = document.createElement('li');
-
-        if (typeof event.data === 'string') {
-          const parsedMessage = JSON.parse(event.data);
-
-          if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
-            li.textContent = `${parsedMessage.nickname} has joined the chat.`;
-            updateUserList(parsedMessage.userList);
-          } else {
-            li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
-          }
-        } else if (event.data instanceof Blob) {
-          const textMessage = await event.data.text();
-          const parsedMessage = JSON.parse(textMessage);
-
-          if (parsedMessage.event === 'userJoined' && parsedMessage.userList) {
-            li.textContent = `${parsedMessage.nickname} has joined the chat.`;
-            updateUserList(parsedMessage.userList);
-          } else {
-            li.textContent = `${parsedMessage.nickname}: ${parsedMessage.content}`;
-          }
-        }
-
-        chatMessages.appendChild(li);
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
-      }
-    });
-
     function sendMessage() {
-    const messageInput = document.getElementById('messageInput');
-    const message = messageInput.value;
+      const messageInput = document.getElementById('messageInput');
+      const message = messageInput.value;
 
-    // 클라이언트에서 서버로 메시지 전송
-    socket.send(JSON.stringify({
-      event: 'sendMessage',
-      content: message
-    }));
+      // 클라이언트에서 서버로 메시지 전송
+      console.log('Sending message to server:', message);
+      socket.send(JSON.stringify({
+        event: 'sendMessage',
+        content: message
+      }));
 
-    messageInput.value = '';
-  }
+      messageInput.value = '';
+    }
 
     function updateUserList(userList) {
       const userListContainer = document.getElementById('userList');
