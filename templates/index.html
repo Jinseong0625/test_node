@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omok Game</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <h1>Omok Game</h1>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
+    <script>
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        socket.on('set_player', data => {
+            playerID = data.id;
+            console.log('You are player ' + playerID + '. Your turn is ' + data.turn);
+        });
+
+        socket.on('update_board', data => {
+            console.log('Move made by player ' + data.player_id + ' at row ' + data.row + ', col ' + data.col);
+            // Update the game board display
+            drawStone(data.row, data.col, data.player_id);
+        });
+
+        socket.on('set_turn', data => {
+            console.log('It is now player ' + data.player_id + "'s turn");
+        });
+
+        socket.on('game_over', data => {
+            console.log('Game over! Player ' + data.winner + ' wins!');
+        });
+
+        // Draw initial board
+        drawBoard();
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            for (let i = 0; i < 15; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * 40, 0);
+                ctx.lineTo(i * 40, 600);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * 40);
+                ctx.lineTo(600, i * 40);
+                ctx.stroke();
+            }
+        }
+
+        function drawStone(row, col, player_id) {
+            const centerX = col * 40 + 20;
+            const centerY = row * 40 + 20;
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 15, 0, 2 * Math.PI);
+            ctx.fillStyle = player_id === 1 ? 'black' : 'white';
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // Handle user interactions
+        canvas.addEventListener('click', event => {
+            const rect = canvas.getBoundingClientRect();
+            const col = Math.floor((event.clientX - rect.left) / 40);
+            const row = Math.floor((event.clientY - rect.top) / 40);
+            socket.emit('make_move', { 'row': row, 'col': col, 'player_id': playerID });  // Assuming player 1 always
+        });
+    </script>
+</body>
+</html>
